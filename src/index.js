@@ -1,4 +1,15 @@
 "use strict";
+var __assign = (this && this.__assign) || function () {
+    __assign = Object.assign || function(t) {
+        for (var s, i = 1, n = arguments.length; i < n; i++) {
+            s = arguments[i];
+            for (var p in s) if (Object.prototype.hasOwnProperty.call(s, p))
+                t[p] = s[p];
+        }
+        return t;
+    };
+    return __assign.apply(this, arguments);
+};
 var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, generator) {
     function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
     return new (P || (P = Promise))(function (resolve, reject) {
@@ -35,6 +46,15 @@ var __generator = (this && this.__generator) || function (thisArg, body) {
         if (op[0] & 5) throw op[1]; return { value: op[0] ? op[1] : void 0, done: true };
     }
 };
+var __spreadArray = (this && this.__spreadArray) || function (to, from, pack) {
+    if (pack || arguments.length === 2) for (var i = 0, l = from.length, ar; i < l; i++) {
+        if (ar || !(i in from)) {
+            if (!ar) ar = Array.prototype.slice.call(from, 0, i);
+            ar[i] = from[i];
+        }
+    }
+    return to.concat(ar || Array.prototype.slice.call(from));
+};
 exports.__esModule = true;
 require("dotenv/config");
 var fs_1 = require("fs");
@@ -46,11 +66,12 @@ console.log("INPUT_FILES_NAME", process.env.DELIVERY_INPUT_FILES_NAME);
 console.log("OUTPUT_JSON_DESTINATION_DIR", process.env.DELIVERY_OUTPUT_JSON_DESTINATION_DIR);
 function writeOutputFile(jsonObj) {
     var dataBuffer = Buffer.from(JSON.stringify(jsonObj));
-    (0, fs_1.writeFile)("".concat(process.env.DELIVERY_OUTPUT_JSON_DESTINATION_DIR, "/").concat(process.env.DELIVERY_OUTPUT_JSON_FILE_NAME, ".json"), dataBuffer, FILE_ENCODING, function (err) {
+    var destFile = "".concat(process.env.DELIVERY_OUTPUT_JSON_DESTINATION_DIR, "/").concat(process.env.DELIVERY_OUTPUT_JSON_FILE_NAME, ".json");
+    (0, fs_1.writeFile)(destFile, dataBuffer, FILE_ENCODING, function (err) {
         if (err)
-            return console.log("sv-delivery-confitions ERROR writing output file : ", err);
-        console.log("sv-delivery-confitions SUCCESS file written");
-        console.log("LINES WRITTEN : ", jsonObj.length);
+            return console.log("sv-delivery-conditions ERROR writing output file : ", err);
+        console.log("sv-delivery-conditions SUCCESS file written");
+        console.log("sv-delivery-conditions SUCCESS lines written in file %s : %s", destFile, jsonObj.length);
     });
 }
 function readExistingJsonData() {
@@ -61,8 +82,8 @@ function readExistingJsonData() {
         return jsonObj;
     }
     catch (error) {
-        console.log("sv-delivery-confitions ERROR reading file : ", error);
-        throw error;
+        console.log("sv-delivery-conditions ERROR reading file : ", error);
+        return undefined;
     }
 }
 function generateArrayOfJSONfromCSV() {
@@ -74,22 +95,9 @@ function generateArrayOfJSONfromCSV() {
             filesNames = ((_a = process.env.DELIVERY_INPUT_FILES_NAME_LIST) === null || _a === void 0 ? void 0 : _a.split(",")) || [];
             filesToImport = filesNames.map(function (fileName) { return "".concat(process.env.DELIVERY_INPUT_FILES_DIR, "/").concat(fileName); });
             return [2 /*return*/, Promise.all(filesToImport.map(function (file) { return __awaiter(_this, void 0, void 0, function () {
-                    var jsonObj;
                     return __generator(this, function (_a) {
-                        switch (_a.label) {
-                            case 0:
-                                console.log("importing file ", file);
-                                return [4 /*yield*/, csv({ delimiter: "," }).fromFile(file)];
-                            case 1:
-                                jsonObj = _a.sent();
-                                // .then((_jsonObj: any) => {
-                                //   jsonObj = _jsonObj;
-                                //   console.log('_jsonObj',_jsonObj.length);
-                                //   return _jsonObj;
-                                // });
-                                console.log("jsonObj", jsonObj.length);
-                                return [2 /*return*/, csv({ delimiter: "," }).fromFile(file)];
-                        }
+                        console.log("importing file ", file);
+                        return [2 /*return*/, csv({ delimiter: "," }).fromFile(file)];
                     });
                 }); }))];
         });
@@ -97,20 +105,85 @@ function generateArrayOfJSONfromCSV() {
 }
 //generateArrayOfJSONfromCSV();
 //readExistingJsonData();
-function updateDeliveryConditions() {
+function objectMatchesSearchKeys(dataObject, searchObject) {
+    var _a;
+    var objectKeys = ((_a = process.env.DELIVERY_INPUT_FILES_UNIQUE_KEY) === null || _a === void 0 ? void 0 : _a.split(",")) || [];
+    for (var _i = 0, objectKeys_1 = objectKeys; _i < objectKeys_1.length; _i++) {
+        var key = objectKeys_1[_i];
+        if (new String(dataObject[key])
+            .toUpperCase()
+            .normalize("NFD")
+            .replace(/[\u0300-\u036f]/g, "") !==
+            new String(searchObject[key])
+                .toUpperCase()
+                .normalize("NFD")
+                .replace(/[\u0300-\u036f]/g, ""))
+            return false;
+    }
+    return true;
+}
+function mergeObjects(existingObject, newObject) {
+    //console.log('meging objects',existingObject,newObject)
+    var updatedObject = __assign({}, existingObject);
+    for (var key in newObject) {
+        updatedObject[key] = new String(newObject[key])
+            .toUpperCase()
+            .normalize("NFD")
+            .replace(/[\u0300-\u036f]/g, "");
+    }
+    return updatedObject;
+}
+function updateData(existingData, newData) {
+    var updatedData = __spreadArray([], existingData, true);
+    var counter = -1;
+    var _loop_1 = function (data) {
+        var indexFound = existingData.findIndex(function (_existingData) {
+            return objectMatchesSearchKeys(_existingData, data);
+        });
+        if (indexFound >= 0) {
+            var mergedObject = mergeObjects(existingData[indexFound], data);
+            if (mergedObject.updated) {
+                updatedData[indexFound] = mergedObject;
+            }
+            else {
+                existingData[indexFound] = __assign(__assign({}, existingData[indexFound]), { updated: true });
+                updatedData.push(mergedObject);
+            }
+        }
+        else {
+            updatedData.push(data);
+        }
+    };
+    for (var _i = 0, newData_1 = newData; _i < newData_1.length; _i++) {
+        var data = newData_1[_i];
+        _loop_1(data);
+    }
+    return updatedData;
+}
+function initDeliveryConditions() {
     return __awaiter(this, void 0, void 0, function () {
-        var filesData;
+        var filesDataImported, outputData;
         return __generator(this, function (_a) {
             switch (_a.label) {
                 case 0: return [4 /*yield*/, generateArrayOfJSONfromCSV()];
                 case 1:
-                    filesData = _a.sent();
-                    console.log("filesData", filesData.length);
-                    //console.log("filesData", filesData[0].length);
-                    writeOutputFile(filesData);
+                    filesDataImported = _a.sent();
+                    console.log("sv-delivery-conditions number of files to import : ", filesDataImported.length);
+                    outputData = [{}];
+                    if (filesDataImported.length > 0) {
+                        console.log("sv-delivery-conditions reading file number 1");
+                        outputData = filesDataImported[0];
+                        console.log("sv-delivery-conditions lines in buffer END ", outputData.length);
+                        filesDataImported.slice(1).forEach(function (fileData, index) {
+                            console.log("sv-delivery-conditions reading file number ", index + 2);
+                            outputData = updateData(outputData, fileData);
+                            console.log("sv-delivery-conditions lines in buffer END ", outputData.length);
+                        });
+                    }
+                    writeOutputFile(outputData);
                     return [2 /*return*/];
             }
         });
     });
 }
-updateDeliveryConditions();
+initDeliveryConditions();

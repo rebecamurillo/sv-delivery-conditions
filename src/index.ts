@@ -14,21 +14,20 @@ console.log(
 
 function writeOutputFile(jsonObj: Array<Object>) {
   const dataBuffer = Buffer.from(JSON.stringify(jsonObj));
-
-  writeFile(
-    `${process.env.DELIVERY_OUTPUT_JSON_DESTINATION_DIR}/${process.env.DELIVERY_OUTPUT_JSON_FILE_NAME}.json`,
-    dataBuffer,
-    FILE_ENCODING,
-    function (err) {
-      if (err)
-        return console.log(
-          "sv-delivery-confitions ERROR writing output file : ",
-          err
-        );
-      console.log("sv-delivery-confitions SUCCESS file written");
-      console.log("LINES WRITTEN : ", jsonObj.length);
-    }
-  );
+  const destFile = `${process.env.DELIVERY_OUTPUT_JSON_DESTINATION_DIR}/${process.env.DELIVERY_OUTPUT_JSON_FILE_NAME}.json`;
+  writeFile(destFile, dataBuffer, FILE_ENCODING, function (err) {
+    if (err)
+      return console.log(
+        "sv-delivery-conditions ERROR writing output file : ",
+        err
+      );
+    console.log("sv-delivery-conditions SUCCESS file written");
+    console.log(
+      "sv-delivery-conditions SUCCESS lines written in file %s : %s",
+      destFile,
+      jsonObj.length
+    );
+  });
 }
 
 function readExistingJsonData() {
@@ -41,12 +40,12 @@ function readExistingJsonData() {
     console.log("LINES READ : ", jsonObj.length);
     return jsonObj;
   } catch (error) {
-    console.log("sv-delivery-confitions ERROR reading file : ", error);
-    throw error;
+    console.log("sv-delivery-conditions ERROR reading file : ", error);
+    return undefined;
   }
 }
 
-async function generateArrayOfJSONfromCSV(): Promise<Array<Object>> {
+async function generateArrayOfJSONfromCSV(): Promise<Array<Array<Object>>> {
   const filesNames: Array<string> =
     process.env.DELIVERY_INPUT_FILES_NAME_LIST?.split(",") || [];
 
@@ -57,15 +56,6 @@ async function generateArrayOfJSONfromCSV(): Promise<Array<Object>> {
   return Promise.all(
     filesToImport.map(async (file) => {
       console.log("importing file ", file);
-      const jsonObj: Array<Object> = await csv({ delimiter: "," }).fromFile(
-        file
-      );
-      // .then((_jsonObj: any) => {
-      //   jsonObj = _jsonObj;
-      //   console.log('_jsonObj',_jsonObj.length);
-      //   return _jsonObj;
-      // });
-      console.log("jsonObj", jsonObj.length);
 
       return csv({ delimiter: "," }).fromFile(file);
     })
@@ -75,11 +65,97 @@ async function generateArrayOfJSONfromCSV(): Promise<Array<Object>> {
 //generateArrayOfJSONfromCSV();
 //readExistingJsonData();
 
-async function updateDeliveryConditions() {
-  const filesData = await generateArrayOfJSONfromCSV();
-  console.log("filesData", filesData.length);
-  //console.log("filesData", filesData[0].length);
-  writeOutputFile(filesData);
+function objectMatchesSearchKeys(dataObject: any, searchObject: any) {
+  const objectKeys =
+    process.env.DELIVERY_INPUT_FILES_UNIQUE_KEY?.split(",") || [];
+
+  for (const key of objectKeys) {
+    if (
+      new String(dataObject[key])
+        .toUpperCase()
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "") !==
+      new String(searchObject[key])
+        .toUpperCase()
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+    )
+      return false;
+  }
+
+  return true;
 }
 
-updateDeliveryConditions();
+function mergeObjects(existingObject: any, newObject: any): any {
+  //console.log('meging objects',existingObject,newObject)
+  let updatedObject = { ...existingObject };
+  for (const key in newObject) {
+    updatedObject[key] = new String(newObject[key])
+      .toUpperCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "");
+  }
+
+  return updatedObject;
+}
+
+function updateData(
+  existingData: Array<Object>,
+  newData: Array<Object>
+): Array<Object> {
+  let updatedData = [...existingData];
+
+  var counter = -1;
+  for (const data of newData) {
+    const indexFound = existingData.findIndex((_existingData) =>
+      objectMatchesSearchKeys(_existingData, data)
+    );
+
+    if (indexFound >= 0) {
+      const mergedObject = mergeObjects(existingData[indexFound], data);
+      if (mergedObject.updated) {
+        updatedData[indexFound] = mergedObject;
+      } else {
+        existingData[indexFound] = {
+          ...existingData[indexFound],
+          updated: true,
+        };
+        updatedData.push(mergedObject);
+      }
+    } else {
+      updatedData.push(data);
+    }
+  }
+
+  return updatedData;
+}
+
+async function initDeliveryConditions() {
+  const filesDataImported = await generateArrayOfJSONfromCSV();
+  console.log(
+    "sv-delivery-conditions number of files to import : ",
+    filesDataImported.length
+  );
+  let outputData = [{}];
+
+  if (filesDataImported.length > 0) {
+    console.log("sv-delivery-conditions reading file number 1");
+    outputData = filesDataImported[0];
+    console.log(
+      "sv-delivery-conditions lines in buffer END ",
+      outputData.length
+    );
+    filesDataImported.slice(1).forEach((fileData, index) => {
+      console.log("sv-delivery-conditions reading file number ", index + 2);
+      outputData = updateData(outputData, fileData);
+      console.log(
+        "sv-delivery-conditions lines in buffer END ",
+        outputData.length
+      );
+    });
+  }
+
+  writeOutputFile(outputData);
+}
+
+initDeliveryConditions();
