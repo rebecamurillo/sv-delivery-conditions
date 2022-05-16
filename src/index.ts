@@ -1,69 +1,74 @@
-import "dotenv/config";
-import { readFile, readFileSync, writeFile } from "fs";
+import { readFileSync, writeFile, WriteFileOptions } from "fs";
 const csv = require("csvtojson");
 
-const FILE_ENCODING = "utf8";
+const DEFAULT_FILE_ENCODING = "utf8";
+type MultCsvMergeToJsonOptions = {
+  inputDir: string;
+  inputKeys: Array<string>;
+  inputFileNameList: Array<string>;
+  outputDir: string;
+  outputFileName: string;
+  columnDelimiter: string;
+  encoding?: WriteFileOptions;
+};
 
-console.log("process", process.env.NODE_ENV);
-console.log("INPUT_FILES_DIR", process.env.DELIVERY_INPUT_FILES_DIR);
-console.log("INPUT_FILES_NAME", process.env.DELIVERY_INPUT_FILES_NAME);
-console.log(
-  "OUTPUT_JSON_DESTINATION_DIR",
-  process.env.DELIVERY_OUTPUT_JSON_DESTINATION_DIR
-);
-
-function writeOutputFile(jsonObj: Array<Object>) {
+function writeOutputFile(
+  options: MultCsvMergeToJsonOptions,
+  jsonObj: Array<Object>
+) {
   const dataBuffer = Buffer.from(JSON.stringify(jsonObj));
-  const destFile = `${process.env.DELIVERY_OUTPUT_JSON_DESTINATION_DIR}/${process.env.DELIVERY_OUTPUT_JSON_FILE_NAME}.json`;
-  writeFile(destFile, dataBuffer, FILE_ENCODING, function (err) {
+  const destFile = `${options.outputDir}/${options.outputFileName}.json`;
+  const encoding = options.encoding || DEFAULT_FILE_ENCODING;
+
+  writeFile(destFile, dataBuffer, encoding, function (err) {
     if (err)
       return console.log(
-        "sv-delivery-conditions ERROR writing output file : ",
+        "multiple-csv-merge-to-json ERROR writing output file : ",
         err
       );
-    console.log("sv-delivery-conditions SUCCESS file written");
+    console.log("multiple-csv-merge-to-json SUCCESS file written");
     console.log(
-      "sv-delivery-conditions SUCCESS lines written in file %s : %s",
+      "multiple-csv-merge-to-json SUCCESS lines written in file %s : %s",
       destFile,
       jsonObj.length
     );
   });
 }
 
-function readExistingJsonData() {
+async function readExistingJsonDataArray(
+  options: MultCsvMergeToJsonOptions
+): Promise<Array<Object>> {
   try {
-    const data = readFileSync(
-      `${process.env.DELIVERY_OUTPUT_JSON_DESTINATION_DIR}/${process.env.DELIVERY_OUTPUT_JSON_FILE_NAME}.json`,
-      FILE_ENCODING
+    const encoding = options.encoding || DEFAULT_FILE_ENCODING;
+
+    const data = await readFileSync(
+      `${options.outputDir}/${options.outputFileName}`,
+      encoding
     );
-    const jsonObj = JSON.parse(data);
-    console.log("LINES READ : ", jsonObj.length);
-    return jsonObj;
+    if (typeof data === "string") return JSON.parse(data) as Array<Object>;
   } catch (error) {
-    console.log("sv-delivery-conditions ERROR reading file : ", error);
-    return undefined;
+    console.log("multiple-csv-merge-to-json ERROR reading file : ", error);
   }
+  return [];
 }
 
-async function generateArrayOfJSONfromCSV(): Promise<Array<Array<Object>>> {
-  const filesNames: Array<string> =
-    process.env.DELIVERY_INPUT_FILES_NAME_LIST?.split(",") || [];
+async function generateArrayOfJSONfromCSV(
+  options: MultCsvMergeToJsonOptions
+): Promise<Array<Array<Object>>> {
+  const filesNames: Array<string> = options.inputFileNameList;
 
   const filesToImport = filesNames.map(
-    (fileName) => `${process.env.DELIVERY_INPUT_FILES_DIR}/${fileName}`
+    (fileName) => `${options.inputDir}/${fileName}`
   );
 
   return Promise.all(
     filesToImport.map(async (file) => {
-      console.log("importing file ", file);
+      console.log("multiple-csv-merge-to-json importing file :", file);
 
-      return csv({ delimiter: "," }).fromFile(file);
+      return csv({ delimiter: options.columnDelimiter }).fromFile(file);
     })
   );
 }
-
-//generateArrayOfJSONfromCSV();
-//readExistingJsonData();
 
 function objectMatchesSearchKeys(dataObject: any, searchObject: any) {
   const objectKeys =
@@ -87,7 +92,6 @@ function objectMatchesSearchKeys(dataObject: any, searchObject: any) {
 }
 
 function mergeObjects(existingObject: any, newObject: any): any {
-  //console.log('meging objects',existingObject,newObject)
   let updatedObject = { ...existingObject };
   for (const key in newObject) {
     updatedObject[key] = new String(newObject[key])
@@ -105,7 +109,6 @@ function updateData(
 ): Array<Object> {
   let updatedData = [...existingData];
 
-  var counter = -1;
   for (const data of newData) {
     const indexFound = existingData.findIndex((_existingData) =>
       objectMatchesSearchKeys(_existingData, data)
@@ -130,32 +133,51 @@ function updateData(
   return updatedData;
 }
 
-async function initDeliveryConditions() {
-  const filesDataImported = await generateArrayOfJSONfromCSV();
+async function mergeCsvFilesToJsonArray(options: MultCsvMergeToJsonOptions) {
+  const filesDataImported = await generateArrayOfJSONfromCSV(options);
   console.log(
-    "sv-delivery-conditions number of files to import : ",
+    "multiple-csv-merge-to-json number of files to import : ",
     filesDataImported.length
   );
   let outputData = [{}];
 
   if (filesDataImported.length > 0) {
-    console.log("sv-delivery-conditions reading file number 1");
+    console.log("multiple-csv-merge-to-json reading file at index 0");
     outputData = filesDataImported[0];
     console.log(
-      "sv-delivery-conditions lines in buffer END ",
+      "multiple-csv-merge-to-json lines in buffer END ",
       outputData.length
     );
     filesDataImported.slice(1).forEach((fileData, index) => {
-      console.log("sv-delivery-conditions reading file number ", index + 2);
+      console.log(
+        "multiple-csv-merge-to-json reading file at index %s",
+        index + 1
+      );
       outputData = updateData(outputData, fileData);
       console.log(
-        "sv-delivery-conditions lines in buffer END ",
+        "multiple-csv-merge-to-json lines in buffer END ",
         outputData.length
       );
     });
   }
 
-  writeOutputFile(outputData);
+  writeOutputFile(options, outputData);
 }
 
-initDeliveryConditions();
+async function getJsonArray(options: MultCsvMergeToJsonOptions) {
+  return readExistingJsonDataArray(options);
+}
+
+mergeCsvFilesToJsonArray({
+  inputDir: "./data_input_files",
+  inputKeys: ["city", "region"],
+  inputFileNameList: [
+    "general_rates.csv",
+    "premium_rates.csv",
+    "danger_zones.csv",
+  ],
+  outputDir: "./data_output_json",
+  outputFileName: "delivery_rates",
+  columnDelimiter: ",",
+});
+export { MultCsvMergeToJsonOptions, mergeCsvFilesToJsonArray, getJsonArray };

@@ -56,55 +56,61 @@ var __spreadArray = (this && this.__spreadArray) || function (to, from, pack) {
     return to.concat(ar || Array.prototype.slice.call(from));
 };
 exports.__esModule = true;
+exports.getJsonArray = exports.mergeCsvFilesToJsonArray = void 0;
 require("dotenv/config");
 var fs_1 = require("fs");
 var csv = require("csvtojson");
-var FILE_ENCODING = "utf8";
-console.log("process", process.env.NODE_ENV);
-console.log("INPUT_FILES_DIR", process.env.DELIVERY_INPUT_FILES_DIR);
-console.log("INPUT_FILES_NAME", process.env.DELIVERY_INPUT_FILES_NAME);
-console.log("OUTPUT_JSON_DESTINATION_DIR", process.env.DELIVERY_OUTPUT_JSON_DESTINATION_DIR);
-function writeOutputFile(jsonObj) {
+var DEFAULT_FILE_ENCODING = "utf8";
+function writeOutputFile(options, jsonObj) {
     var dataBuffer = Buffer.from(JSON.stringify(jsonObj));
-    var destFile = "".concat(process.env.DELIVERY_OUTPUT_JSON_DESTINATION_DIR, "/").concat(process.env.DELIVERY_OUTPUT_JSON_FILE_NAME, ".json");
-    (0, fs_1.writeFile)(destFile, dataBuffer, FILE_ENCODING, function (err) {
+    var destFile = "".concat(options.outputDir, "/").concat(options.outputFileName, ".json");
+    var encoding = options.encoding || DEFAULT_FILE_ENCODING;
+    (0, fs_1.writeFile)(destFile, dataBuffer, encoding, function (err) {
         if (err)
-            return console.log("sv-delivery-conditions ERROR writing output file : ", err);
-        console.log("sv-delivery-conditions SUCCESS file written");
-        console.log("sv-delivery-conditions SUCCESS lines written in file %s : %s", destFile, jsonObj.length);
+            return console.log("multiple-csv-merge-to-json ERROR writing output file : ", err);
+        console.log("multiple-csv-merge-to-json SUCCESS file written");
+        console.log("multiple-csv-merge-to-json SUCCESS lines written in file %s : %s", destFile, jsonObj.length);
     });
 }
-function readExistingJsonData() {
-    try {
-        var data = (0, fs_1.readFileSync)("".concat(process.env.DELIVERY_OUTPUT_JSON_DESTINATION_DIR, "/").concat(process.env.DELIVERY_OUTPUT_JSON_FILE_NAME, ".json"), FILE_ENCODING);
-        var jsonObj = JSON.parse(data);
-        console.log("LINES READ : ", jsonObj.length);
-        return jsonObj;
-    }
-    catch (error) {
-        console.log("sv-delivery-conditions ERROR reading file : ", error);
-        return undefined;
-    }
+function readExistingJsonDataArray(options) {
+    return __awaiter(this, void 0, void 0, function () {
+        var encoding, data, error_1;
+        return __generator(this, function (_a) {
+            switch (_a.label) {
+                case 0:
+                    _a.trys.push([0, 2, , 3]);
+                    encoding = options.encoding || DEFAULT_FILE_ENCODING;
+                    return [4 /*yield*/, (0, fs_1.readFileSync)("".concat(options.outputDir, "/").concat(options.outputFileName), encoding)];
+                case 1:
+                    data = _a.sent();
+                    if (typeof data === "string")
+                        return [2 /*return*/, JSON.parse(data)];
+                    return [3 /*break*/, 3];
+                case 2:
+                    error_1 = _a.sent();
+                    console.log("multiple-csv-merge-to-json ERROR reading file : ", error_1);
+                    return [3 /*break*/, 3];
+                case 3: return [2 /*return*/, []];
+            }
+        });
+    });
 }
-function generateArrayOfJSONfromCSV() {
-    var _a;
+function generateArrayOfJSONfromCSV(options) {
     return __awaiter(this, void 0, void 0, function () {
         var filesNames, filesToImport;
         var _this = this;
-        return __generator(this, function (_b) {
-            filesNames = ((_a = process.env.DELIVERY_INPUT_FILES_NAME_LIST) === null || _a === void 0 ? void 0 : _a.split(",")) || [];
-            filesToImport = filesNames.map(function (fileName) { return "".concat(process.env.DELIVERY_INPUT_FILES_DIR, "/").concat(fileName); });
+        return __generator(this, function (_a) {
+            filesNames = options.inputFileNameList;
+            filesToImport = filesNames.map(function (fileName) { return "".concat(options.inputDir, "/").concat(fileName); });
             return [2 /*return*/, Promise.all(filesToImport.map(function (file) { return __awaiter(_this, void 0, void 0, function () {
                     return __generator(this, function (_a) {
-                        console.log("importing file ", file);
-                        return [2 /*return*/, csv({ delimiter: "," }).fromFile(file)];
+                        console.log("multiple-csv-merge-to-json importing file :", file);
+                        return [2 /*return*/, csv({ delimiter: options.columnDelimiter }).fromFile(file)];
                     });
                 }); }))];
         });
     });
 }
-//generateArrayOfJSONfromCSV();
-//readExistingJsonData();
 function objectMatchesSearchKeys(dataObject, searchObject) {
     var _a;
     var objectKeys = ((_a = process.env.DELIVERY_INPUT_FILES_UNIQUE_KEY) === null || _a === void 0 ? void 0 : _a.split(",")) || [];
@@ -123,7 +129,6 @@ function objectMatchesSearchKeys(dataObject, searchObject) {
     return true;
 }
 function mergeObjects(existingObject, newObject) {
-    //console.log('meging objects',existingObject,newObject)
     var updatedObject = __assign({}, existingObject);
     for (var key in newObject) {
         updatedObject[key] = new String(newObject[key])
@@ -160,30 +165,50 @@ function updateData(existingData, newData) {
     }
     return updatedData;
 }
-function initDeliveryConditions() {
+function mergeCsvFilesToJsonArray(options) {
     return __awaiter(this, void 0, void 0, function () {
         var filesDataImported, outputData;
         return __generator(this, function (_a) {
             switch (_a.label) {
-                case 0: return [4 /*yield*/, generateArrayOfJSONfromCSV()];
+                case 0: return [4 /*yield*/, generateArrayOfJSONfromCSV(options)];
                 case 1:
                     filesDataImported = _a.sent();
-                    console.log("sv-delivery-conditions number of files to import : ", filesDataImported.length);
+                    console.log("multiple-csv-merge-to-json number of files to import : ", filesDataImported.length);
                     outputData = [{}];
                     if (filesDataImported.length > 0) {
-                        console.log("sv-delivery-conditions reading file number 1");
+                        console.log("multiple-csv-merge-to-json reading file at index 0");
                         outputData = filesDataImported[0];
-                        console.log("sv-delivery-conditions lines in buffer END ", outputData.length);
+                        console.log("multiple-csv-merge-to-json lines in buffer END ", outputData.length);
                         filesDataImported.slice(1).forEach(function (fileData, index) {
-                            console.log("sv-delivery-conditions reading file number ", index + 2);
+                            console.log("multiple-csv-merge-to-json reading file at index %s", index + 1);
                             outputData = updateData(outputData, fileData);
-                            console.log("sv-delivery-conditions lines in buffer END ", outputData.length);
+                            console.log("multiple-csv-merge-to-json lines in buffer END ", outputData.length);
                         });
                     }
-                    writeOutputFile(outputData);
+                    writeOutputFile(options, outputData);
                     return [2 /*return*/];
             }
         });
     });
 }
-initDeliveryConditions();
+exports.mergeCsvFilesToJsonArray = mergeCsvFilesToJsonArray;
+function getJsonArray(options) {
+    return __awaiter(this, void 0, void 0, function () {
+        return __generator(this, function (_a) {
+            return [2 /*return*/, readExistingJsonDataArray(options)];
+        });
+    });
+}
+exports.getJsonArray = getJsonArray;
+mergeCsvFilesToJsonArray({
+    inputDir: "./data_input_files",
+    inputKeys: ["city", "region"],
+    inputFileNameList: [
+        "general_rates.csv",
+        "premium_rates.csv",
+        "danger_zones.csv",
+    ],
+    outputDir: "./data_output_json",
+    outputFileName: "delivery_rates",
+    columnDelimiter: ","
+});

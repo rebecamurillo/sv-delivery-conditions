@@ -1,5 +1,5 @@
 {
-  "name": "sv-delivery-conditions",
+  "name": "multiple-csv-merge-to-json",
   "version": "1.0.0",
   "description": "Delivery conditions for specific localities in a country. ",
   "main": "index.ts",
@@ -10,7 +10,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/rebecamurillo/sv-delivery-conditions.git"
+    "url": "git+https://github.com/rebecamurillo/multiple-csv-merge-to-json.git"
   },
   "keywords": [
     "shipping",
@@ -22,16 +22,15 @@
   "author": "Rebeca Murillo",
   "license": "MIT",
   "bugs": {
-    "url": "https://github.com/rebecamurillo/sv-delivery-conditions/issues"
+    "url": "https://github.com/rebecamurillo/multiple-csv-merge-to-json/issues"
   },
-  "homepage": "https://github.com/rebecamurillo/sv-delivery-conditions#readme",
+  "homepage": "https://github.com/rebecamurillo/multiple-csv-merge-to-json#readme",
   "devDependencies": {
     "@types/node": "^17.0.32",
     "typescript": "^4.6.4"
   },
   "dependencies": {
     "csvtojson": "^2.0.10",
-    "dotenv": "^16.0.1",
     "fs": "^0.0.1-security"
   }
 }
